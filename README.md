@@ -31,10 +31,6 @@ Bulletin of Volcanology 63(1), pages 20–44. issn: 1432-0819. https://doi.org/1
 Favalli, M. et al. (2005). “Forecasting lava flow paths by a stochastic approach”. Geophysical Research Letters 32(3). 
 issn: 0094- 8276. https://doi.org/10.1029/2004gl021718.**
 
-This version of DONWFLOWGO is the result of a collaborative effort involving the master’s thesis of Jenna Diamico (UB), 
-coding contributions from Tristan Engels, and my own work Oryaëlle Chevrel. 
-An AI language model (ChatGPT, OpenAI) was used to support code formulation and text refinement; all scientific decisions 
-and responsibility remain with the authors.
 
 ## Description of the package 
 This package includes :
@@ -94,46 +90,55 @@ NODATA_value  0
 ```
 [config_general]
 #yes or short or no
-use_gui = yes
-#Chose the mode either downflow or downflowgo
+use_gui = no
+grid_mode = yes
+#Chose either downflow or downflowgo
 mode = downflowgo
 mapping_display = yes
 
+
 [paths]
-eruptions_folder = /Users/yourfolder
+eruptions_folder = ./assets/outputs
 delete_existing_results = yes
-dem = /Users/yourDEM.asc
+dem = ./assets/input/DEM/srtm_48_17_utm.asc
 #csv_vent_file is 0 it will take the UTM coordinate below, if path to a file it will take the file
 csv_vent_file = 0
 
 [downflow]
-name_vent = Vent_1
-easting = 369082.7
-northing = 7647204.29
+name_vent = vent_1_grid
+easting = 369050
+northing = 7647086
 dh = 2
 n_path = 10000
 slope_step = 10
-#EPSG_code are usually La Réunion 32740, Galapagos 32715; Iceland 32627;
+#EPSG_code are usually La Réunion 32740, Galapagos 32715; Iceland 32627; Hawaii
 epsg_code = 32740
 
+
 [pyflowgo]
-json = ./test/PdF_template.json
+json = ./assets/input/PdF_template.json
 #effusion_rates_input should be either O, or a number or 3 numbers representing starting, ending and step
-effusion_rates_input = 5,20,5
+effusion_rates_input = 5,30,5
+
+[grid_parameters]
+ventgrid_size = 100
+ventgrid_resolution = 50
+grid_csv = ./assets/output/csv_vent_file.csv
+dem_resolution = 90
 
 [mapping]
-img_tif_map_background_path = /Users/yourimage.tif
+img_tif_map_background_path = ./assets/input/map_background/HS_srtm_48_17_utm.tif
 #lava_flow_outline_path must be point geometry
-monitoring_network_path = 0
+monitoring_network_path = ./assets/input/monitoring_stations/example_monitoring_stations.shp
 #lava_flow_outline_path must be polygone geometry
-lava_flow_outline_path = 0
+lava_flow_outline_path = ./assets/input/lavaflow_outline/example_lavaflow_outline.shp
 logo_path = 0
 source_img_tif_map_background =©credit
 # Set motion about data, e.g 'UNVERIFIED DATA - NOT FOR DISTRIBUTION' or 'DONNEES NON VALIDES - NE PAS DIFFUSER' or 0 for nothing
-unverified_data = DONNEES NON VALIDES - NE PAS DIFFUSER
+unverified_data = TEST
 
 [language]
-language = FR
+language = EN
 
 ```
 3) The ```.json``` file for PyFLOWGO:
@@ -144,8 +149,8 @@ For more information go to ```https://github.com/pyflowgo/pyflowgo.git ```
 To run DOWNFLOWGO from your terminal :
  ``` python main_downflowgo.py config_downflowgo.ini ```
 
-You can choose in the configuration file whether you want a GUI and if you want to run DOWNFLOW or DOWNFLOWGO
-You can laso choose to display the map or no (if not it will be saved anyway in the folder)
+You can choose in the configuration file whether you want a GUI and if you want to run DOWNFLOW or DOWNFLOWGO.
+You can also choose to display the map or no (if not it will be saved anyway in the folder)
 
 ## Output files
 
@@ -162,9 +167,13 @@ In the dedicated folder define in configuration_file (```eruptions_folder```) yo
 
     
 #  Authors
- Dr. Magdalena Oryaëlle Chevrel (oryaelle.chevrel@ird.fr) - Laboratoire Magmas et Volcans
-
-Please do not hesitate the contact me for any further information or assistance
+ 
+This version of DONWFLOWGO is the result of a collaborative effort involving the master’s thesis of Jenna Diamico 
+(University at Buffalo), coding contributions from Tristan Engels, 
+and my own work Dr. Magdalena Oryaëlle Chevrel - Laboratoire Magmas et Volcans. 
+An AI language model (ChatGPT, OpenAI) was used to support code formulation and text refinement; all scientific decisions 
+and responsibility remain with the authors.
+Please do not hesitate the contact me for any further information or assistance  (oryaelle.chevrel@ird.fr)
 
 # Licence
 The current license of the software is GPL v3.0.
