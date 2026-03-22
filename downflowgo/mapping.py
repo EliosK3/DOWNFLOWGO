@@ -201,221 +201,88 @@ class Mapping:
         self.ax.set_ylim(yllcorner_dem, yllcorner_dem + nrows_dem * cellsize_dem)
 
     def plot_vector_layers(self):
-        # Plot the vent vector layer
+        import os
+        import fiona
+        from shapely.geometry import shape, Point
+        import matplotlib.pyplot as plt
+
+        # ----------- VENTS -----------
         with fiona.open(self.vent_path) as vent:
             for feature in vent:
                 geometry = shape(feature['geometry'])
                 if geometry.geom_type == 'Point':
                     x, y = geometry.x, geometry.y
-                    if self.grid_mode=='yes':
+                    if self.grid_mode == 'yes':
                         self.ax.plot(x, y, 'yo', markersize=1, zorder=1)
                     else:
-                        self.ax.plot(x, y, 'r^', markersize=10,zorder=1)
+                        self.ax.plot(x, y, 'r^', markersize=10, zorder=1)
 
-        # Plot the LOSD vector layer
+        # ----------- LOSD -----------
         with fiona.open(self.losd_path) as losd:
             for feature in losd:
                 geometry = shape(feature['geometry'])
                 if geometry.geom_type == 'LineString':
                     x, y = zip(*geometry.coords)
-                    self.ax.plot(x, y, color='#8B0000', linestyle='-', linewidth=2)
+                    self.ax.plot(x, y, color='#8B0000', linewidth=2)
 
-
-        ##Plot additional interquartil rectangular for grid:
-        #if grid_mode == 'yes':
-        #    tolerance = 50  # distance minimale in meters to avoid overlap
-        #    eff_r_values = []
-        #    with fiona.open(shp_iqr) as iqr:
-        #        for feature in iqr:
-        #            eff_r_values.append(feature['properties']['Effusion_r'])
-        #
-        #    # Normalisation for colormap
-        #    norm_eff_r = colors.Normalize(vmin=min(eff_r_values), vmax=max(eff_r_values))
-        #    #≈cmap_eff_r = cm.get_cmap('Blues') # change colormap if needed
-        #    cmap_eff_r = lambda x: 'cyan'  # returns 'blue' for any input
-        #
-        #    seen_lines = []
-        #    with fiona.open(shp_iqr) as iqr:
-        #        for feature in iqr:
-        #            geometry = shape(feature['geometry'])
-        #            props = feature['properties']
-        #            eff_r = props['Effusion_r']
-        #            color = cmap_eff_r(norm_eff_r(eff_r))
-        #
-        #            if geometry.geom_type == 'LineString':
-        #                # Avoid tracing two times the same
-        #                is_duplicate = any(geometry.distance(s) < tolerance for s in seen_lines)
-        #                if not is_duplicate:
-        #                    x, y = zip(*geometry.coords)
-        #                    ax.plot(x, y, color=color, linewidth=5, alpha=0.8) # plot the lines for a given effusion rate
-        #                    seen_lines.append(geometry)
-        #
-        #                    # 2) plot Med_X / Med_Y and draw the arrow with the label
-        #                    if props.get('Med_X') is not None and props.get('Med_Y') is not None:
-        #                        mx, my = props['Med_X'], props['Med_Y']
-        #                        ax.plot(mx, my,  'b', marker=7)
-        #                        #ax.plot(mx, my, 'b', marker=7)
-        #
-        #                        # Add annotation with line and white box around label
-        #                        ax.annotate(
-        #                            str(int(eff_r)),
-        #                            xy=(mx, my),  # tip of the arrow
-        #                            xytext=(mx-200, my+800),  # base of the arrow where the label is
-        #                            arrowprops=dict(arrowstyle='-',linewidth=1, color='blue'
-        #                            ),
-        #                            fontsize=8,
-        #                            color='blue',
-        #                            ha='center',
-        #                            va="center",
-        #                            bbox=dict(
-        #                                facecolor='white',
-        #                                edgecolor='blue',
-        #                                alpha=0.9,
-        #                                boxstyle='square,pad=0.2'
-        #                            )
-        #                        )
-        #
-        #    # Plot additional runout layers for 'downflowgo'
-        #if grid_mode !='yes' and mode == 'downflowgo' and run_outs_path:
-        #    with fiona.open(run_outs_path) as run_outs:
-        #        points = []
-        #        labels = []
-        #
-        #        for feature in run_outs:
-        #            geometry = shape(feature['geometry'])
-        #            properties = feature['properties']
-        #            if geometry.geom_type == 'Point':
-        #                x, y = geometry.x, geometry.y
-        #                points.append((x, y))
-        #                labels.append(properties['Effusion_r'])
-        #                ax.plot(x, y, 'b', marker=7)
-        #
-        #        unique_points = {}
-        #        for (x, y), label in zip(points, labels):
-        #            if (x, y) not in unique_points or label < unique_points[(x, y)]:
-        #                unique_points[(x, y)] = label
-        #
-        #        for (x, y), label in unique_points.items():
-        #            ax.annotate(label, (x, y), xytext=(0, 8), textcoords='offset points', color='blue', weight='bold',
-        #                        fontsize=10, ha='center')
-
-        tolerance = 50  # distance minimale in meters to avoid overlap
-        eff_r_values = []
-
-        # Select shapefile depending on grid_mode
+        # ----------- RUNOUTS / SEGMENTS -----------
+        tolerance = 50
         shp_to_open = None
         if self.mode == 'downflowgo':
-            if self.grid_mode == 'no':
+            if self.grid_mode == 'yes':
+                shp_to_open = self.shp_iqr
+            else:
                 shp_to_open = self.shp_30pct
 
-        if self.grid_mode == 'yes':
-            shp_to_open = self.shp_iqr
+        # ✅ sécurité fichier
+        if shp_to_open is None or not os.path.exists(shp_to_open):
+            print("⚠️ Shapefile missing:", shp_to_open)
+            return
 
-        if shp_to_open is not None:
-            with fiona.open(shp_to_open) as src:
-                for feature in src:
-                    eff_r_values.append(feature['properties']['Eff_r'])
+        seen_lines = []
 
-            # Normalisation for colormap
-            norm_eff_r = colors.Normalize(vmin=min(eff_r_values), vmax=max(eff_r_values))
-            # cmap_eff_r = cm.get_cmap('Blues') # change colormap if needed
-            cmap_eff_r = lambda x: 'cyan'
+        # ----------- Plot lignes en cyan -----------
+        with fiona.open(shp_to_open) as src:
+            for feature in src:
+                geometry = shape(feature['geometry'])
+                props = feature['properties']
+                eff_r = props.get('Eff_r')
+                if eff_r is None:
+                    continue
 
-            seen_lines = []
+                if geometry.geom_type == 'LineString':
+                    # éviter doublons
+                    if any(geometry.distance(s) < tolerance for s in seen_lines):
+                        continue
 
-            with fiona.open(shp_to_open) as src:
-                for feature in src:
-                    geometry = shape(feature['geometry'])
-                    props = feature['properties']
-                    eff_r = props['Eff_r']
-                    color = cmap_eff_r(norm_eff_r(eff_r))
+                    x, y = zip(*geometry.coords)
+                    self.ax.plot(x, y, color='cyan', linewidth=5, alpha=0.8)
+                    seen_lines.append(geometry)
 
-                    if geometry.geom_type == 'LineString':
-                        # Avoid tracing two times the same
-                        is_duplicate = any(geometry.distance(s) < tolerance for s in seen_lines)
-                        if not is_duplicate:
-                            x, y = zip(*geometry.coords)
-                            self.ax.plot(x, y, color=color, linewidth=5, alpha=0.8)
-                            seen_lines.append(geometry)
-
-                            if self.grid_mode == 'yes':
-                                mx, my = props.get('Med_X'), props.get('Med_Y')
-                            else:
-                                mx, my = props.get('X_run_out'), props.get('Y_run_out')
-
-                            if mx is not None and my is not None:
-                                self.ax.plot(mx, my, 'b', marker=7)
-
-                                # Add annotation with line and white box around label
-                                self.ax.annotate(
-                                    str(int(eff_r)),
-                                    xy=(mx, my),  # tip of the arrow
-                                    xytext=(mx - 200, my + 800),  # base of the arrow
-                                    arrowprops=dict(arrowstyle='-', linewidth=1, color='blue'),
-                                    fontsize=8,
-                                    color='blue',
-                                    ha='center',
-                                    va="center",
-                                    bbox=dict(
-                                        facecolor='white',
-                                        edgecolor='blue',
-                                        alpha=0.9,
-                                        boxstyle='square,pad=0.2'
-                                    )
-                                )
-        else:
-            # No flowgo shapefile in this mode
-            pass
-            # ------------ Plot lava flow outline and monitoring network ----------
-
-        if self.lavaflow_outline_path and self.lavaflow_outline_path != "0":
-            with fiona.open(self.lavaflow_outline_path) as lavaflow_outline:
-                for feature in lavaflow_outline:
-                    if feature.get('geometry') is not None:
-                        geometry = shape(feature['geometry'])
-                        if geometry.geom_type == 'Polygon':
-                            coordinates = geometry.exterior.coords.xy
-                            x = coordinates[0]
-                            y = coordinates[1]
-                            polygon_coords = list(zip(x, y))
-                            polygon = Polygon(polygon_coords, edgecolor='black', facecolor='none')
-                            self.ax.add_patch(polygon)
+                    # ----------- POINT LABEL -----------
+                    if self.grid_mode == 'yes':
+                        mx, my = props.get('Med_X'), props.get('Med_Y')
                     else:
-                        print("Lavaflow_outline does not have a valid geometry")
+                        mx, my = props.get('X_run_out'), props.get('Y_run_out')
 
-        # Plot monitoring network vector layer
-        if self.monitoring_network_path and self.monitoring_network_path != "0":
-            with fiona.open(self.monitoring_network_path) as monitoring_network:
-                label_monitoring_network = []
-                point_monitoring_network = []
-                for feature in monitoring_network:
-                    geometry = shape(feature['geometry'])
-                    properties = feature['properties']
-                    if geometry.geom_type == 'Point':
-                        x, y = geometry.x, geometry.y
-                        point_monitoring_network.append((x, y))
-                        label_monitoring_network.append(properties['Name'])
-                        self.ax.plot(x, y, color="#333333", linestyle='', marker='s', markersize=2)
-                    else:
-                        print("Monitoring_network does not have a valid geometry")
-                # Create a dictionary to keep only the smallest label (lexicographically) for each unique point
-                unique_monitoring_network = {}
-                for (x, y), label in zip(point_monitoring_network, label_monitoring_network):
-                    if label is None:
-                        continue  # Skip stations with no name
-                    if (x, y) not in unique_monitoring_network or label < unique_monitoring_network[(x, y)]:
-                        unique_monitoring_network[(x, y)] = label
-
-                # Displaying the monitoring_network names just above the points
-                for (x, y), label in unique_monitoring_network.items():
-                    self.ax.annotate(
-                        label, (x, y),
-                        xytext=(0, 3),  # Offset of 5 units above the point
-                        textcoords='offset points',
-                        color="#333333", fontsize=7,
-                        ha='center'  # Center the text horizontally
-                    )
-
+                    if mx is not None and my is not None:
+                        self.ax.plot(mx, my, 'b', marker=7)
+                        self.ax.annotate(
+                            str(int(eff_r)),
+                            xy=(mx, my),
+                            xytext=(mx - 200, my + 800),
+                            arrowprops=dict(arrowstyle='-', linewidth=1, color='blue'),
+                            fontsize=8,
+                            color='blue',
+                            ha='center',
+                            va="center",
+                            bbox=dict(
+                                facecolor='white',
+                                edgecolor='blue',
+                                alpha=0.9,
+                                boxstyle='square,pad=0.2'
+                            )
+                        )
     def add_legend(self):
         # Adjust the figure size
         self.fig.subplots_adjust(right=0.7)

@@ -31,6 +31,10 @@ Bulletin of Volcanology 63(1), pages 20–44. issn: 1432-0819. https://doi.org/1
 Favalli, M. et al. (2005). “Forecasting lava flow paths by a stochastic approach”. Geophysical Research Letters 32(3). 
 issn: 0094- 8276. https://doi.org/10.1029/2004gl021718.**
 
+This version of DONWFLOWGO is the result of a collaborative effort involving the master’s thesis of Jenna Diamico (UB), 
+coding contributions from Tristan Engels, and my own work Oryaëlle Chevrel. 
+An AI language model (ChatGPT, OpenAI) was used to support code formulation and text refinement; all scientific decisions 
+and responsibility remain with the authors.
 
 ## Description of the package 
 This package includes :
@@ -42,7 +46,9 @@ provided by Massimiliano Favalli (hopefully soon available on github). To instal
 
 2) the main script to run DOWNFLOW: ``` main_downflowgo.py   ```   
 
-3) examples of configuration files, the requirements and environment
+3)  an "assets" folder with examples of inputs and outputs, 
+
+5) the requirements and environment
 
 ## Actions
 

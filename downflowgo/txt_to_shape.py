@@ -37,7 +37,7 @@ def get_runouts_shp(run_outs_file, shp_runouts, epsg_code):
     pointDf = pd.read_csv(run_outs_file, header=0, sep=',')
     pointDf.head()
     # define schema for line shape file
-    schema = {'geometry': 'Point', 'properties': [("flow_id", 'str'), ("Effusion_rate", 'int'), ("X_run_out", 'float'),
+    schema = {'geometry': 'Point', 'properties': [("flow_id", 'str'), ("Eff_r", 'int'), ("X_run_out", 'float'),
                                                   ("Y_run_out", 'float'), ("Channel_Depth", 'float'), 
                                                   ("Channel_Width_init", 'float'), ("Elevation_run_out", 'int'), 
                                                   ("Distance_run_out", 'int') ]}
@@ -50,7 +50,7 @@ def get_runouts_shp(run_outs_file, shp_runouts, epsg_code):
         rowDict = {
             'geometry': {'type': 'Point',
                          'coordinates': (row.X_run_out, row.Y_run_out)},
-            'properties': {'flow_id': row.flow_id, 'Effusion_rate': row.Effusion_rate, 'X_run_out': row.X_run_out,
+            'properties': {'flow_id': row.flow_id, 'Eff_r': row.Effusion_rate, 'X_run_out': row.X_run_out,
                            'Y_run_out': row.Y_run_out, 'Channel_Depth': row.Depth, 'Channel_Width_init': row.Width_init,
                            'Elevation_run_out': row.Elevation_run_out, 'Distance_run_out': row.Distance_run_out
                            }}
@@ -237,16 +237,28 @@ def crop_and_convert_to_tif(sim_asc, cropped_geotiff_file, epsg_code):
     print(f" Cropped simulation saved in Geotiff at '{cropped_geotiff_file}'")
 
 def get_runouts_grid_shp(run_outs_file, shp_runouts, epsg_code):
-    # Read CSV and drop the first unnamed column
+
     pointDf = pd.read_csv(run_outs_file, header=0, sep=',')
+
     if pointDf.columns[0] == "":
         pointDf = pointDf.drop(pointDf.columns[0], axis=1)
 
-    print(pointDf.head())
 
-    # Mapping from CSV columns to shapefile-safe field names
+    # 🔥 Detect effusion column automatically
+    if "Effusion_rate" in pointDf.columns:
+        eff_col = "Effusion_rate"
+    elif "Effusion_r" in pointDf.columns:
+        eff_col = "Effusion_r"
+    elif "Eff_r" in pointDf.columns:
+        eff_col = "Eff_r"
+    elif "Effusion Rate" in pointDf.columns:
+        eff_col = "Effusion Rate"
+    else:
+        raise ValueError(f"No effusion column found. Columns: {pointDf.columns}")
+
+    # ✅ Mapping CSV → shapefile
     field_map = {
-        "Effusion Rate": "Eff_r",
+        eff_col: "Eff_r",
         "Median X": "Med_X",
         "Median Y": "Med_Y",
         "25th Percentile X": "P25_X",
@@ -261,26 +273,36 @@ def get_runouts_grid_shp(run_outs_file, shp_runouts, epsg_code):
         "-2sigma Y": "M2sig_Y"
     }
 
-    # Define schema
+    # ✅ Schema
     schema = {
         'geometry': 'Point',
-        'properties': [(short, 'float') for short in field_map.values()]
+        'properties': [(v, 'float') for v in field_map.values()]
     }
 
-    # Effusion rate should be int
-    schema['properties'][0] = (field_map["Effusion Rate"], 'int')
+    # Force Eff_r as int
+    schema['properties'][0] = ("Eff_r", 'int')
 
-    # Write points to shapefile
     with fiona.open(shp_runouts, mode='w',
                     driver='ESRI Shapefile',
                     schema=schema,
                     crs=f'epsg:{epsg_code}') as pointShp:
 
         for _, row in pointDf.iterrows():
-            properties = {
-                field_map[col]: (int(row[col]) if col == "Effusion Rate" else float(row[col]))
-                for col in field_map
-            }
+
+            properties = {}
+
+            for csv_col, shp_col in field_map.items():
+
+                if csv_col not in row:
+                    raise ValueError(f"Missing column: {csv_col}")
+
+                value = row[csv_col]
+
+                if csv_col == eff_col:
+                    properties[shp_col] = int(value)
+                else:
+                    properties[shp_col] = float(value)
+
             rowDict = {
                 'geometry': {
                     'type': 'Point',
@@ -288,12 +310,10 @@ def get_runouts_grid_shp(run_outs_file, shp_runouts, epsg_code):
                 },
                 'properties': properties
             }
+
             pointShp.write(rowDict)
 
-    # close fiona object
-    pointShp.close()
-    print(f"----------- Runouts coordinates are saved as shape file in:'{shp_runouts}'---------------")
-
+    print(f"----------- Runouts coordinates saved in: '{shp_runouts}' -----------")
 def cut_lines_losd(losd_path, run_outs_path, output_path):
     """
     Cut LoSd lines into P25-P75 segments based on run_outs features,
