@@ -3,7 +3,9 @@ from tkinter import filedialog, ttk
 import os
 import sys
 import configparser
-import downflowgo.mapping as mapping
+from downflowgo.mapping import Mapping
+from downflowgo.config_loader import Config
+from downflowgo.runner import Runner
 
 
 def get_folder(entry_var):
@@ -36,11 +38,15 @@ def open_create_map_window(root):
         print(f"Error : Impossible to read '{config_file}'")
         sys.exit(1)
 
-
+    mode = config.get('config_general', 'mode')
+    mapping_display = config.get('config_general', 'mapping_display')
+    grid_mode = config.get('config_general', 'grid_mode', fallback='no')
     language = config["language"]["language"]
     path_to_eruptions = config["paths"]["eruptions_folder"]
     dem = config["paths"]["dem"]
     name_vent = config["downflow"]["name_vent"]
+    dh = config["downflow"]["dh"]
+    n = config["downflow"]["n_path"]
     img_tif_map_background = config["mapping"]["img_tif_map_background_path"]
     monitoring_network_path = config["mapping"]["monitoring_network_path"]
     lava_flow_outline_path = config["mapping"]["lava_flow_outline_path"]
@@ -67,13 +73,24 @@ def open_create_map_window(root):
 
     flow_id = ""
 
-    def get_sim_layers():
-        return {
-            'shp_losd_file': os.path.join(entry_path_to_results_var.get(), 'map', f'losd_{flow_id}.shp'),
-            'shp_vent_file': os.path.join(entry_path_to_results_var.get(), 'map', f'vent_{flow_id}.shp'),
-            'cropped_geotiff_file': os.path.join(entry_path_to_results_var.get(), 'map', f'sim_{flow_id}.tif'),
-            'shp_runouts': os.path.join(entry_path_to_results_var.get(), 'map', f'runouts_{flow_id}.shp'),
-        }
+    def get_sim_layers(grid_mode):
+        if grid_mode =='yes':
+            return {
+                'shp_losd_file': os.path.join(entry_path_to_results_var.get(),  'map',f'{flow_id}_pathfinder.shp'),
+                'shp_vent_file': os.path.join(entry_path_to_results_var.get(), 'map', f'vents_{flow_id}.shp'),
+                'cropped_geotiff_file': os.path.join(entry_path_to_results_var.get(), f'{flow_id}_ventgrid_sim_multi_n.tif'),
+                'shp_runouts': os.path.join(entry_path_to_results_var.get(),'map', f'runouts_{flow_id}.shp'),
+                'shp_iqr': os.path.join(entry_path_to_results_var.get(),'map', f'interquartiles_{flow_id}.shp')
+            }
+        else:
+            return {
+                'shp_losd_file': os.path.join(entry_path_to_results_var.get(), 'map', f'losd_{flow_id}.shp'),
+                'shp_vent_file': os.path.join(entry_path_to_results_var.get(), 'map', f'vents_{flow_id}.shp'),
+                'cropped_geotiff_file': os.path.join(entry_path_to_results_var.get(), f'sim_{flow_id}.tif'),
+                'shp_runouts': os.path.join(entry_path_to_results_var.get(), 'map', f'runouts_{flow_id}.shp'),
+                'shp_30pct': os.path.join(entry_path_to_results_var.get(), 'map', f'30pct_{flow_id}.shp'),
+            }
+
 
     map_layers = {
         'img_tif_map_background': img_tif_map_background,
@@ -120,8 +137,21 @@ def open_create_map_window(root):
     logo_var.trace_add("write", lambda *args: update_map_layers())
 
     def create_map():
-        mapping.create_map(entry_path_to_results_var.get(), dem, flow_id, map_layers, get_sim_layers(),
-                           mode='downflowgo', language=language, display = 'yes')
+        #mapping.create_map(entry_path_to_results_var.get(), dem, flow_id, map_layers, get_sim_layers(grid_mode),
+        #                   mode='downflowgo', language=language, display = 'yes', grid_mode=grid_mode)
+
+        # Make the map
+
+        mapping = Mapping(path_to_folder=entry_path_to_results_var.get(),
+                          dem=dem,
+                          flow_id=name_vent,
+                          map_layers=map_layers,
+                          grid_mode=grid_mode,
+                          sim_layers=get_sim_layers(grid_mode),
+                          mode=mode,
+                          language=language)
+        mapping.create_map(display=mapping_display)
+
         map_window.destroy()
 
     button_frame = tk.Frame(map_window)

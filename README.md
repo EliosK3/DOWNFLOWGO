@@ -64,6 +64,9 @@ or requirements :
 
 ```pip install git+https://github.com/pyflowgo/pyflowgo.git   ```
 
+--> or upgrade
+
+```pip install --upgrade --force-reinstall git+https://github.com/pyflowgo/pyflowgo.git      ```
 ### 2) Install **DOWNFLOW**
 --> Install **DOWNFLOW** by following the instruction in the **DOWNFLOW** folder: **README_DOWNFLOW.md** 
 

@@ -5,18 +5,23 @@ from configupdater import ConfigUpdater
 
 
 # Keys to edit from the INI file
-def configure_gui_options(gui_option):
+def configure_gui_options(gui_option, grid_mode):
     global CONFIG_KEYS_TO_EDIT, BROWSE_PATH_KEYS, DIRECTORY_KEYS, HELP_TEXTS
 
     if gui_option == 1:
         CONFIG_KEYS_TO_EDIT = {
-            'config_general': ['mode', 'mapping_display'],
+            'config_general': ['mode', 'mapping_display', 'grid_mode'],
             'paths': ['eruptions_folder', 'dem', 'csv_vent_file', 'delete_existing_results'],
             'downflow': ['name_vent','easting', 'northing', 'DH', 'n_path', 'slope_step', 'epsg_code'],
             'pyflowgo': ['json', 'effusion_rates_input'],
             'mapping': ['img_tif_map_background_path', 'monitoring_network_path', 'lava_flow_outline_path','logo_path', 'source_img_tif_map_background', 'unverified_data'],
             'language': ['language']
         }
+
+        if grid_mode == 'yes':
+            CONFIG_KEYS_TO_EDIT.update({
+                'grid_parameters': ['ventgrid_size', 'ventgrid_resolution', 'dem_resolution']
+            })
 
         BROWSE_PATH_KEYS = {
             'paths': ['eruptions_folder', 'dem', 'csv_vent_file'],
@@ -31,19 +36,21 @@ def configure_gui_options(gui_option):
         HELP_TEXTS = {
             ('downflow', 'easting'): "UTM",
             ('downflow', 'northing'): "UTM",
+            ('downflow', 'slope_step'): "in m for making the profile",
             ('paths', 'dem'): "ASCII grid format",
             ('pyflowgo', 'json'): "Path to PyFLOWGO input JSON file",
             ('pyflowgo', 'effusion_rates_input'): "one value or a range (first, last, step)",
             ('paths', 'csv_vent_file'): "0 or load CSV file",
+            ('config_general', 'grid_mode'): "yes or no",
             ('config_general', 'mode'): "downflow or downflowgo",
             ('config_general', 'mapping_display'): "yes or no",
-            ('paths','delete_existing_results'): "yes or no",
+            ('paths', 'delete_existing_results'): "yes or no",
         }
 
     elif gui_option == 2:
         CONFIG_KEYS_TO_EDIT = {
             'paths': ['eruptions_folder'],
-            'downflow': ['name_vent','easting', 'northing']
+            'downflow': ['name_vent', 'easting', 'northing']
         }
 
         BROWSE_PATH_KEYS = {
@@ -108,8 +115,8 @@ def has_browse_button(section, key):
     return section in BROWSE_PATH_KEYS and key in BROWSE_PATH_KEYS[section]
 
 
-def launch_editor(config_file, gui_option=1):
-    configure_gui_options(gui_option)
+def launch_editor(config_file, grid_mode, gui_option=1):
+    configure_gui_options(gui_option, grid_mode)
 
     root = tk.Tk()
     root.title("Configuration File Editor for DOWNFLOWGO")
@@ -181,6 +188,10 @@ def launch_editor(config_file, gui_option=1):
     save_as_button = tk.Button(btn_row, text="Save as...", command=save_as_only)
     save_as_button.pack(side=tk.LEFT, padx=5)
 
+    # Reminder label before RUN button
+    reminder_label = tk.Label(btn_row, text="⚠️ Please SAVE or SAVE AS before running",
+                              fg="red", font=('Arial', 10, 'italic'))
+    reminder_label.pack(side=tk.LEFT, padx=5)
     run_button = tk.Button(btn_row, text="RUN", command=run_and_exit)
     run_button.pack(side=tk.LEFT, padx=5)
 

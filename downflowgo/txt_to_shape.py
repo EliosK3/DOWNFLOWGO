@@ -1,4 +1,3 @@
-#import requires packages
 import fiona
 import pandas as pd
 import csv
@@ -6,7 +5,7 @@ import rasterio
 import numpy as np
 from rasterio.transform import from_origin
 from rasterio.crs import CRS
-from shapely.geometry import mapping, Point
+from shapely.geometry import shape, mapping, LineString, Point
 
 def get_path_shp(losd_file, shp_losd_file, epsg_code):
     # import points from losd_file
@@ -31,7 +30,6 @@ def get_path_shp(losd_file, shp_losd_file, epsg_code):
     # close fiona object
     lineShp.close()
     print(f"++++++++++++++++++ Losd file is saved in shape format at: '{shp_losd_file}'+++++++++++++++++")
-
 
 def get_runouts_shp(run_outs_file, shp_runouts, epsg_code):
 
@@ -129,6 +127,7 @@ def write_single_vent_shp(flow_id, long, lat, shp_vent_file, epsg_code):
             'properties': {'flow_id': flow_id}
         }
         shp.write(record)
+
 def crop_asc_file(sim_asc, cropped_asc_file):
     with open(sim_asc) as file:
         header_lines = [next(file) for _ in range(6)]
@@ -179,7 +178,6 @@ def convert_to_tiff(cropped_asc_file, sim_tif_file):
         data = src.read(1)
         with rasterio.open(sim_tif_file, "w", **profile) as dst:
             dst.write(data, 1)
-
 
 def crop_and_convert_to_tif(sim_asc, cropped_geotiff_file, epsg_code):
     """
@@ -237,3 +235,284 @@ def crop_and_convert_to_tif(sim_asc, cropped_geotiff_file, epsg_code):
         dst.write(cropped_data, 1)
 
     print(f" Cropped simulation saved in Geotiff at '{cropped_geotiff_file}'")
+
+def get_runouts_grid_shp(run_outs_file, shp_runouts, epsg_code):
+    # Read CSV and drop the first unnamed column
+    pointDf = pd.read_csv(run_outs_file, header=0, sep=',')
+    if pointDf.columns[0] == "":
+        pointDf = pointDf.drop(pointDf.columns[0], axis=1)
+
+    print(pointDf.head())
+
+    # Mapping from CSV columns to shapefile-safe field names
+    field_map = {
+        "Effusion Rate": "Eff_r",
+        "Median X": "Med_X",
+        "Median Y": "Med_Y",
+        "25th Percentile X": "P25_X",
+        "25th Percentile Y": "P25_Y",
+        "75th Percentile X": "P75_X",
+        "75th Percentile Y": "P75_Y",
+        "Average X": "Avg_X",
+        "Average Y": "Avg_Y",
+        "+2sigma X": "P2sig_X",
+        "+2sigma Y": "P2sig_Y",
+        "-2sigma X": "M2sig_X",
+        "-2sigma Y": "M2sig_Y"
+    }
+
+    # Define schema
+    schema = {
+        'geometry': 'Point',
+        'properties': [(short, 'float') for short in field_map.values()]
+    }
+
+    # Effusion rate should be int
+    schema['properties'][0] = (field_map["Effusion Rate"], 'int')
+
+    # Write points to shapefile
+    with fiona.open(shp_runouts, mode='w',
+                    driver='ESRI Shapefile',
+                    schema=schema,
+                    crs=f'epsg:{epsg_code}') as pointShp:
+
+        for _, row in pointDf.iterrows():
+            properties = {
+                field_map[col]: (int(row[col]) if col == "Effusion Rate" else float(row[col]))
+                for col in field_map
+            }
+            rowDict = {
+                'geometry': {
+                    'type': 'Point',
+                    'coordinates': (row["Median X"], row["Median Y"])
+                },
+                'properties': properties
+            }
+            pointShp.write(rowDict)
+
+    # close fiona object
+    pointShp.close()
+    print(f"----------- Runouts coordinates are saved as shape file in:'{shp_runouts}'---------------")
+
+def cut_lines_losd(losd_path, run_outs_path, output_path):
+    """
+    Cut LoSd lines into P25-P75 segments based on run_outs features,
+    and save all segments in a single shapefile.
+
+    Parameters:
+        losd_path (str): Path to the LoSd line shapefile.
+        run_outs_path (str): Path to run_outs shapefile with P25_X, P25_Y, P75_X, P75_Y, Eff_r.
+        output_path (str): Path to save the output shapefile.
+
+    Returns:
+        None
+    """
+    # Load LoSd lines
+    with fiona.open(losd_path, 'r') as losd_src:
+        losd_lines = [shape(feat['geometry']) for feat in losd_src]
+
+        crs = losd_src.crs  # keep the CRS
+        schema = {
+            'geometry': 'LineString',
+            'properties': {'Eff_r': 'float'}
+        }
+
+    # Load run_outs features
+    with fiona.open(run_outs_path, 'r') as runs_src:
+        run_features = list(runs_src)
+
+    all_segments = []
+
+    for row in run_features:
+        props = row['properties']
+        eff_r = props['Eff_r']
+        med_x = props.get('Med_X')
+        med_y = props.get('Med_Y')
+        p25 = Point(props['P25_X'], props['P25_Y'])
+        p75 = Point(props['P75_X'], props['P75_Y'])
+
+
+        for line in losd_lines:
+            if not isinstance(line, LineString) or line.length == 0:
+                continue
+
+            # Project P25 and P75 onto the line
+            d_start = line.project(p25)
+            d_end = line.project(p75)
+
+            if d_start > d_end:
+                d_start, d_end = d_end, d_start
+
+            # Extract segment
+            coords = []
+            for coord in line.coords:
+                pt = Point(coord)
+                d = line.project(pt)
+                if d_start <= d <= d_end:
+                    coords.append(coord)
+
+            # Ensure segment starts/ends exactly at P25/P75
+            coords = [line.interpolate(d_start).coords[0]] + coords + [line.interpolate(d_end).coords[0]]
+            segment = LineString(coords)
+
+            all_segments.append({
+                'Eff_r': eff_r,
+                'Med_X': med_x,
+                'Med_Y': med_y,
+                'geometry': segment
+            })
+    schema = {
+        'geometry': 'LineString',
+        'properties': {
+            'Eff_r': 'float',
+            'Med_X': 'float',
+            'Med_Y': 'float'
+        }
+    }
+    # Write output shapefile
+    with fiona.open(output_path, 'w', driver='ESRI Shapefile', crs=crs, schema=schema) as dst:
+        for seg in all_segments:
+            dst.write({
+                'geometry': mapping(seg['geometry']),
+                'properties': {
+                    'Eff_r': seg['Eff_r'],
+                    'Med_X': seg['Med_X'],
+                    'Med_Y': seg['Med_Y']
+                }
+            })
+
+def cut_lines_losd_30pct(losd_path, run_outs_path, output_path):
+    """
+    Cut LoSd lines into segments centered on run_out points,
+    with total length = 30% of distance_r.
+    Save all segments in a single shapefile.
+
+    Parameters:
+        losd_path (str): Path to the LoSd line shapefile.
+        run_outs_path (str): Path to run_outs shapefile with x_run_out, y_run_out, distance_r, Eff_r.
+        output_path (str): Path to save the output shapefile.
+    """
+    # Load LoSd lines
+    with fiona.open(losd_path, 'r') as losd_src:
+        losd_lines = [shape(feat['geometry']) for feat in losd_src]
+        crs = losd_src.crs
+
+    # Load run_outs features
+    with fiona.open(run_outs_path, 'r') as runs_src:
+        run_features = list(runs_src)
+
+    all_segments = []
+
+    for row in run_features:
+        props = row['properties']
+        eff_r = props.get('Eff_r')
+        x_run_out = props.get('X_run_out')
+        y_run_out = props.get('Y_run_out')
+        distance_r = props.get('Distance_r')
+
+        if None in (eff_r, x_run_out, y_run_out, distance_r):
+            print("⚠️ Skipping row, missing values:", props)
+            continue
+
+        midpoint = Point(x_run_out, y_run_out)
+        seg_length = 0.3 * distance_r
+        half_length = seg_length / 2.0
+
+        for line in losd_lines:
+            if not isinstance(line, LineString) or line.length == 0:
+                continue
+
+            # Project midpoint onto the line
+            d_mid = line.project(midpoint)
+
+            # Define start and end distances
+            d_start = max(0, d_mid - half_length)
+            d_end = min(line.length, d_mid + half_length)
+
+            # Always interpolate start and end
+            start_pt = line.interpolate(d_start).coords[0]
+            end_pt = line.interpolate(d_end).coords[0]
+
+            # Collect intermediate coords
+            coords = [start_pt]
+            for coord in line.coords:
+                pt = Point(coord)
+                d = line.project(pt)
+                if d_start < d < d_end:
+                    coords.append(coord)
+            coords.append(end_pt)
+
+            # Build the segment
+            segment = LineString(coords)
+
+            all_segments.append({
+                'Eff_r': eff_r,
+                'X_run_out': x_run_out,
+                'Y_run_out': y_run_out,
+                'Distance_r': distance_r,
+                'geometry': segment
+            })
+
+    # Define schema
+    schema = {
+        'geometry': 'LineString',
+        'properties': {
+            'Eff_r': 'int',
+            'X_run_out': 'float',
+            'Y_run_out': 'float',
+            'Distance_r': 'int'
+        }
+    }
+
+    # Write output shapefile
+    with fiona.open(output_path, 'w', driver='ESRI Shapefile', crs=crs, schema=schema) as dst:
+        for seg in all_segments:
+            dst.write({
+                'geometry': mapping(seg['geometry']),
+                'properties': {
+                    'Eff_r': seg['Eff_r'],
+                    'X_run_out': seg['X_run_out'],
+                    'Y_run_out': seg['Y_run_out'],
+                    'Distance_r': seg['Distance_r']
+                }
+            })
+
+def get_vents_runouts_shp(output_csv, shp_vents_runouts, epsg_code):
+
+    # import points from slope file
+    with open(output_csv,'r') as file:
+        try:
+            dialect = csv.Sniffer().sniff(file.read(1024))
+            file.seek(0)  # Reset file pointer after sniffing
+        except csv.Error:
+            print("Could not determine delimiter.")
+            return
+
+    df = pd.read_csv(output_csv, sep=dialect.delimiter)
+
+    # Check required columns
+    if 'X' not in df.columns or 'Y' not in df.columns:
+        raise ValueError("CSV must contain 'X' and 'Y' columns")
+
+    schema = {
+        'geometry': 'Point',
+        'properties': {}  # No attributes
+    }
+
+    with fiona.open(
+        shp_vents_runouts,
+        mode='w',
+        driver='ESRI Shapefile',
+        schema=schema,
+        crs=f'epsg:{epsg_code}'
+    ) as shp:
+
+        for _, row in df.iterrows():
+            shp.write({
+                'geometry': {
+                    'type': 'Point',
+                    'coordinates': (float(row['X']), float(row['Y']))
+                },
+                'properties': {}
+            })
+    print(f"----------- Vent file from run_outs is saved as shape file in:'{shp_vents_runouts}'---------------")

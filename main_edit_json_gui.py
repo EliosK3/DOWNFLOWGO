@@ -18,7 +18,7 @@ if __name__ == "__main__":
                 # Process individual entries of interest
 
                 for key, value in data.items():
-                    if key in ["lava_name", "slope_file", "dem", "step_size"]:
+                    if key in ["lava_name", "slope_file", "step_size"]:
                         label = tk.Label(canvas, text=key)
                         canvas.create_window(10, rows, anchor="w", window=label)
                         if isinstance(value, (int, float)):
@@ -35,7 +35,7 @@ if __name__ == "__main__":
 
                 # Process sections
                 for section, params in data.items():
-                    if section not in ["lava_name", "slope_file", "dem", "step_size"]:
+                    if section not in ["lava_name", "slope_file", "step_size"]:
                         label = tk.Label(canvas, text=section, font=("Helvetica", 12, "bold"))
                         canvas.create_window(10, rows, anchor="w", window=label)
                         rows += 25
