@@ -201,11 +201,6 @@ class Mapping:
         self.ax.set_ylim(yllcorner_dem, yllcorner_dem + nrows_dem * cellsize_dem)
 
     def plot_vector_layers(self):
-        import os
-        import fiona
-        from shapely.geometry import shape, Point
-        import matplotlib.pyplot as plt
-
         # ----------- VENTS -----------
         with fiona.open(self.vent_path) as vent:
             for feature in vent:
@@ -283,6 +278,49 @@ class Mapping:
                                 boxstyle='square,pad=0.2'
                             )
                         )
+        # ----------- LAVA FLOW OUTLINE -----------
+        if self.lavaflow_outline_path and self.lavaflow_outline_path != "0":
+            with fiona.open(self.lavaflow_outline_path) as lavaflow_outline:
+                for feature in lavaflow_outline:
+                    geometry = shape(feature['geometry'])
+                    if geometry.geom_type == 'Polygon':
+                        x, y = geometry.exterior.coords.xy
+                        polygon_coords = list(zip(x, y))
+                        polygon = plt.Polygon(polygon_coords, edgecolor='black', facecolor='none')
+                        self.ax.add_patch(polygon)
+
+        # ----------- MONITORING NETWORK -----------
+        if self.monitoring_network_path and self.monitoring_network_path != "0":
+            point_monitoring_network = []
+            label_monitoring_network = []
+
+            with fiona.open(self.monitoring_network_path) as monitoring_network:
+                for feature in monitoring_network:
+                    geometry = shape(feature['geometry'])
+                    props = feature['properties']
+                    if geometry.geom_type == 'Point':
+                        x, y = geometry.x, geometry.y
+                        point_monitoring_network.append((x, y))
+                        label_monitoring_network.append(props.get('Name'))
+                        self.ax.plot(x, y, color="#333333", linestyle='', marker='s', markersize=2)
+
+            # Unique labels pour chaque point
+            unique_monitoring_network = {}
+            for (x, y), label in zip(point_monitoring_network, label_monitoring_network):
+                if label is None:
+                    continue
+                if (x, y) not in unique_monitoring_network or label < unique_monitoring_network[(x, y)]:
+                    unique_monitoring_network[(x, y)] = label
+
+            # Affichage des noms des stations
+            for (x, y), label in unique_monitoring_network.items():
+                self.ax.annotate(
+                    label, (x, y),
+                    xytext=(0, 3),
+                    textcoords='offset points',
+                    color="#333333", fontsize=7,
+                    ha='center'
+                )
     def add_legend(self):
         # Adjust the figure size
         self.fig.subplots_adjust(right=0.7)
