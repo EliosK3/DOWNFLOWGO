@@ -1,6 +1,6 @@
 {
     "lava_name": "369100_7647086",
-    "slope_file": "/Users/chevrel/Documents/GitHub/DOWNFLOWGO/assets/outputs/vent_1_grid/vent_1_grid/vents_369100_7647086/profile_369100_7647086.txt",
+    "slope_file": "/Users/eliazrampa/Desktop/DOWNFLOWGO_v2/assets/outputs/vent_1_grid/vent_1_grid/vents_369100_7647086/profile_369100_7647086.txt",
     "dem": "dem",
     "step_size": "10.0",
     "effusion_rate_init": 30,
